@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>豆包AI社会模拟器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#4F46E5',
+                        secondary: '#7C3AED',
+                        accent: '#EC4899',
+                        emperor: '#FFD700',
+                        noble: '#1E90FF',
+                        middle: '#FFFFFF',
+                        commoner: '#A0AEC0',
+                        space: '#0B0F1A',
+                        land: '#10B981',
+                        event: '#3B82F6',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .dot-transition {
+                transition: all 0.3s ease;
+            }
+            .timeline-progress {
+                transition: width 1s linear;
+            }
+            .pulse {
+                animation: pulse 3s ease-in-out infinite;
+            }
+            @keyframes pulse {
+                0%, 100% { opacity: 1; }
+                50% { opacity: 0.5; }
+            }
+            .float {
+                animation: float 6s ease-in-out infinite;
+            }
+            @keyframes float {
+                0%, 100% { transform: translateY(0); }
+                50% { transform: translateY(-10px); }
+            }
+            .star {
+                position: absolute;
+                background-color: white;
+                border-radius: 50%;
+                opacity: 0.8;
+                box-shadow: 0 0 5px white;
+            }
+            .event-popup {
+                animation: event-popup 3s ease-in-out forwards;
+            }
+            @keyframes event-popup {
+                0% { transform: translateY(-50px); opacity: 0; }
+                15% { transform: translateY(0); opacity: 1; }
+                85% { transform: translateY(0); opacity: 1; }
+                100% { transform: translateY(50px); opacity: 0; }
+            }
+            /* 优化触摸交互 */
+            button {
+                -webkit-tap-highlight-color: transparent;
+            }
+            .touch-button {
+                @apply transform transition-all duration-200 active:scale-95;
+            }
+            .simulation-container {
+                @apply relative bg-black/30 rounded-lg overflow-hidden border border-white/5 aspect-[4/3] md:aspect-[16/9];
+            }
+            .stats-card {
+                @apply bg-black/20 rounded-lg p-3 border border-white/10 text-center;
+            }
+            .stats-value {
+                @apply text-xl font-bold text-white;
+            }
+            .stats-label {
+                @apply text-sm text-gray-300;
+            }
+        }
+    </style>
+</head>
+<body class="bg-space font-sans overflow-x-hidden min-h-screen flex flex-col">
+    <!-- 宇宙背景 -->
+    <div id="universe" class="fixed inset-0 z-0"></div>
+    
+    <!-- 主要内容 -->
+    <div class="relative z-10 flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col">
+        <!-- 悬浮星球装饰 -->
+        <div class="fixed -top-20 -right-20 w-40 h-40 bg-purple-500/30 rounded-full blur-3xl float"></div>
+        <div class="fixed top-1/4 -left-16 w-32 h-32 bg-blue-500/20 rounded-full blur-3xl float" style="animation-delay: -2s;"></div>
+        <div class="fixed bottom-1/3 -right-12 w-24 h-24 bg-green-500/20 rounded-full blur-3xl float" style="animation-delay: -4s;"></div>
+        
+        <header class="text-center mb-6">
+            <h1 class="text-[clamp(1.5rem,5vw,2.2rem)] font-bold text-white mb-2 tracking-wider">豆包AI社会模拟器</h1>
+            <p class="text-gray-300 max-w-2xl mx-auto text-sm md:text-base">由AI驱动的人类社会演化模拟</p>
+            <p class="text-blue-400 text-xs mt-2">观察社会从远古到未来的发展历程</p>
+        </header>
+
+        <!-- 控制面板 -->
+        <div class="bg-black/20 rounded-xl p-4 mb-6 border border-white/10">
+            <h3 class="font-medium text-white mb-3 flex items-center">
+                <i class="fa fa-sliders mr-2 text-blue-400"></i> 游戏控制
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-sm text-gray-300 mb-1">AI思考频率</label>
+                    <select id="ai-think-frequency" class="w-full bg-black/30 text-white rounded border border-white/10 px-3 py-2">
+                        <option value="5">每5年</option>
+                        <option value="10" selected>每10年</option>
+                        <option value="20">每20年</option>
+                        <option value="50">每50年</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-300 mb-1">AI决策权重</label>
+                    <input type="range" id="ai-decision-weight" min="0" max="100" value="70" class="w-full bg-black/30 h-2 rounded-lg appearance-none cursor-pointer">
+                    <div class="flex justify-between text-xs text-gray-400 mt-1">
+                        <span>规则主导</span>
+                        <span>AI主导</span>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-300 mb-1">AI创造力</label>
+                    <input type="range" id="ai-creativity" min="0" max="100" value="50" class="w-full bg-black/30 h-2 rounded-lg appearance-none cursor-pointer">
+                    <div class="flex justify-between text-xs text-gray-400 mt-1">
+                        <span>保守</span>
+                        <span>创新</span>
+                    </div>
+                </div>
+            </div>
+            <div class="flex justify-center mt-4 space-x-4">
+                <button id="start-btn" class="bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded-lg shadow-lg transition-all duration-300 flex items-center touch-button">
+                    <i class="fa fa-play mr-2"></i> 开始模拟
+                </button>
+                <button id="reset-btn" class="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg shadow transition-all duration-300 flex items-center touch-button" disabled>
+                    <i class="fa fa-refresh mr-2"></i> 重置
+                </button>
+            </div>
+        </div>
+
+        <!-- 状态卡片 -->
+        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
+            <div class="stats-card">
+                <p class="stats-label">人口</p>
+                <p id="population" class="stats-value">10</p>
+            </div>
+            <div class="stats-card">
+                <p class="stats-label">科技</p>
+                <p id="technology" class="stats-value">0</p>
+            </div>
+            <div class="stats-card">
+                <p class="stats-label">资源</p>
+                <p id="resources" class="stats-value">50</p>
+            </div>
+            <div class="stats-card">
+                <p class="stats-label">发展</p>
+                <p id="development" class="stats-value">0</p>
+            </div>
+            <div class="stats-card">
+                <p class="stats-label">皇帝</p>
+                <p id="emperor-count" class="stats-value">0</p>
+            </div>
+            <div class="stats-card">
+                <p class="stats-label">贵族</p>
+                <p id="noble-count" class="stats-value">0</p>
+            </div>
+            <div class="stats-card">
+                <p class="stats-label">平民</p>
+                <p id="commoner-count" class="stats-value">0</p>
+            </div>
+        </div>
+
+        <!-- 模拟区域 -->
+        <div class="simulation-container mb-6">
+            <div id="simulation-area" class="w-full h-full relative">
+                <!-- 绿色陆地背景 -->
+                <div class="absolute inset-0 bg-land/80"></div>
+                
+                <!-- 图例 -->
+                <div class="absolute top-2 left-2 bg-white/10 backdrop-blur-sm p-2 rounded-lg shadow-md border border-white/10">
+                    <div class="flex items-center mb-1">
+                        <div class="w-3 h-3 rounded-full bg-emperor mr-2"></div>
+                        <span class="text-xs text-white">皇帝</span>
+                    </div>
+                    <div class="flex items-center mb-1">
+                        <div class="w-3 h-3 rounded-full bg-noble mr-2"></div>
+                        <span class="text-xs text-white">贵族</span>
+                    </div>
+                    <div class="flex items-center mb-1">
+                        <div class="w-3 h-3 rounded-full bg-middle mr-2"></div>
+                        <span class="text-xs text-white">中产阶级</span>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="w-3 h-3 rounded-full bg-commoner mr-2"></div>
+                        <span class="text-xs text-white">平民</span>
+                    </div>
+                </div>
+                
+                <!-- AI决策指示器 -->
+                <div id="ai-decision-indicator" class="hidden absolute top-2 right-2 bg-blue-500/80 backdrop-blur-sm px-3 py-1 rounded-full text-xs text-white flex items-center">
+                    <i class="fa fa-cogs mr-1"></i> AI思考中...
+                </div>
+                
+                <!-- 时间轴 -->
+                <div class="absolute bottom-0 left-0 right-0 bg-black/50 backdrop-blur-sm p-2 border-t border-white/10">
+                    <div class="flex items-center">
+                        <span id="era" class="text-xs font-medium text-white mr-2">原始文明</span>
+                        <div class="flex-1 bg-gray-800 rounded-full h-2">
+                            <div id="timeline" class="bg-primary h-2 rounded-full timeline-progress w-0"></div>
+                        </div>
+                        <span id="year" class="text-xs font-medium text-white ml-2">公元前10000年</span>
+                    </div>
+                </div>
+                
+                <!-- 事件提示框 -->
+                <div id="event-popup" class="hidden fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black/80 backdrop-blur-md text-white p-6 rounded-xl shadow-2xl border border-white/20 z-50 text-center event-popup max-w-xs">
+                    <h2 id="event-title" class="text-xl font-bold mb-2"></h2>
+                    <p id="event-description" class="text-sm"></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 历史事件框 -->
+        <div class="bg-black/30 rounded-lg p-4 max-h-40 overflow-y-auto border border-white/5 flex-1">
+            <h3 class="font-medium text-white mb-2 flex items-center">
+                <i class="fa fa-history mr-2 text-gray-400"></i> 历史事件
+            </h3>
+            <ul id="history" class="text-sm text-gray-300 space-y-1">
+                <li class="opacity-60">等待模拟开始...</li>
+            </ul>
+        </div>
+    </div>
+
+    <footer class="relative z-10 text-center text-gray-400 text-xs py-3">
+        <p>豆包AI驱动的社会演化模拟器 &copy; 2023</p>
+    </footer>
+
+    <script>
+        // 创建星空背景
+        function createUniverse() {
+            const universe = document.getElementById('universe');
+            const starsCount = 200;
+            
+            for (let i = 0; i < starsCount; i++) {
+                const star = document.createElement('div');
+                star.className = 'star';
+                
+                // 随机位置
+                const x = Math.random() * 100;
+                const y = Math.random() * 100;
+                
+                // 随机大小
+                const size = Math.random() * 2 + 1;
+                
+                // 随机亮度和动画延迟
+                const opacity = Math.random() * 0.8 + 0.2;
+                const delay = Math.random() * 5;
+                const duration = Math.random() * 3 + 2;
+                
+                star.style.left = `${x}%`;
+                star.style.top = `${y}%`;
+                star.style.width = `${size}px`;
+                star.style.height = `${size}px`;
+                star.style.opacity = opacity;
+                star.style.animation = `pulse ${duration}s ease-in-out infinite ${delay}s`;
+                
+                universe.appendChild(star);
+            }
+        }
+
+        // 模拟器配置
+        const config = {
+            tickInterval: 1000, // 每1秒一个时间单位
+            populationGrowthRate: 0.01, // 原始社会人口增长率更低
+            techGrowthBase: 0.005, // 原始社会科技发展更慢
+            resourceConsumptionRate: 0.02,
+            resourceRegenerationRate: 0.03,
+            genderRatio: 0.6,
+            emperorThreshold: 50,
+            nobleThreshold: 30,
+            commonerThreshold: 10,
+            aiThinkFrequency: 10,
+            aiDecisionWeight: 70,
+            aiCreativity: 50,
+            matingChance: 0.1, // 交配概率
+            pregnancyDuration: 9, // 怀孕周期
+            maxLifeSpan: 80 // 最大寿命
+        };
+
+        // 模拟状态
+        let state = {
+            isRunning: false,
+            tick: 0,
+            population: 10,
+            technology: 0,
+            resources: 50,
+            development: 0,
+            era: "原始文明",
+            year: -10000,
+            dots: [],
+            history: ["人类诞生"],
+            emperorCount: 0,
+            nobleCount: 0,
+            commonerCount: 0,
+            lastAiThinkYear: -Infinity,
+            aiRequestPending: false,
+            simulationInterval: null,
+            // 记录已经产生的阶级
+            hasEmperor: false,
+            hasNoble: false,
+            hasCommoner: false,
+            hasMiddleClass: false,
+            // 记录已经发明的技术
+            hasFire: false,
+            hasTools: false,
+            hasAgriculture: false,
+            hasMetallurgy: false,
+            hasWriting: false,
+            hasMedicine: false,
+            hasMechanics: false,
+            hasElectricity: false
+        };
+
+        // 时代定义
+        const eras = [
+            { name: "原始文明", startYear: -10000, endYear: -8000, color: "#8B4513" },
+            { name: "部落文明", startYear: -8000, endYear: -3000, color: "#A0522D" },
+            { name: "古代文明", startYear: -3000, endYear: 500, color: "#D4AF37" },
+            { name: "中世纪文明", startYear: 500, endYear: 1500, color: "#8B0000" },
+            { name: "工业文明", startYear: 1500, endYear: 1900, color: "#4682B4" },
+            { name: "现代文明", startYear: 1900, endYear: 2020, color: "#1E90FF" },
+            { name: "未来文明", startYear: 2020, endYear: 3000, color: "#4B0082" }
+        ];
+
+        // DOM元素
+        const simulationArea = document.getElementById('simulation-area');
+        const startBtn = document.getElementById('start-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const populationEl = document.getElementById('population');
+        const technologyEl = document.getElementById('technology');
+        const resourcesEl = document.getElementById('resources');
+        const developmentEl = document.getElementById('development');
+        const eraEl = document.getElementById('era');
+        const yearEl = document.getElementById('year');
+        const timelineEl = document.getElementById('timeline');
+        const historyEl = document.getElementById('history');
+        const emperorCountEl = document.getElementById('emperor-count');
+        const nobleCountEl = document.getElementById('noble-count');
+        const commonerCountEl = document.getElementById('commoner-count');
+        const aiDecisionIndicator = document.getElementById('ai-decision-indicator');
+        const aiThinkFrequencyEl = document.getElementById('ai-think-frequency');
+        const aiDecisionWeightEl = document.getElementById('ai-decision-weight');
+        const aiCreativityEl = document.getElementById('ai-creativity');
+        const eventPopup = document.getElementById('event-popup');
+        const eventTitle = document.getElementById('event-title');
+        const eventDescription = document.getElementById('event-description');
+
+        // 初始化模拟区域
+        function initSimulationArea() {
+            // 清空模拟区域但保留必要元素
+            const timeline = simulationArea.querySelector('.absolute.bottom-0');
+            const legend = simulationArea.querySelector('.absolute.top-2');
+            const landBg = simulationArea.querySelector('.absolute.inset-0.bg-land\\/80');
+            const aiIndicator = simulationArea.querySelector('#ai-decision-indicator');
+            const eventPopup = simulationArea.querySelector('#event-popup');
+            
+            simulationArea.innerHTML = '';
+            if (landBg) simulationArea.appendChild(landBg);
+            if (legend) simulationArea.appendChild(legend);
+            if (timeline) simulationArea.appendChild(timeline);
+            if (aiIndicator) simulationArea.appendChild(aiIndicator);
+            if (eventPopup) simulationArea.appendChild(eventPopup);
+            
+            // 重新创建点
+            state.dots = [];
+            for (let i = 0; i < state.population; i++) {
+                createDot();
+            }
+            
+            updateClassCounts();
+        }
+
+        // 创建人类点
+        function createDot() {
+            const rect = simulationArea.getBoundingClientRect();
+            const width = rect.width || simulationArea.clientWidth;
+            const height = rect.height || simulationArea.clientHeight;
+            
+            // 随机位置
+            const x = Math.random() * (width - 10);
+            const y = Math.random() * (height - 10);
+            
+            const dot = document.createElement('div');
+            const size = Math.random() * 5 + 5;
+            
+            // 确定社会阶级（原始社会只有部落成员）
+            const socialClass = 'middle';
+            
+            // 随机性别
+            const gender = Math.random() < config.genderRatio ? 'male' : 'female';
+            
+            dot.className = 'absolute rounded-full dot-transition shadow-md';
+            dot.style.width = `${size}px`;
+            dot.style.height = `${size}px`;
+            dot.style.left = `${x}px`;
+            dot.style.top = `${y}px`;
+            dot.style.backgroundColor = getDotColor(socialClass);
+            dot.style.boxShadow = `0 0 3px ${getDotColor(socialClass)}`;
+            
+            simulationArea.appendChild(dot);
+            
+            // 随机速度
+            const speed = (Math.random() - 0.5) * 1.5;
+            const vx = speed * Math.cos(Math.random() * Math.PI * 2);
+            const vy = speed * Math.sin(Math.random() * Math.PI * 2);
+            
+            state.dots.push({
+                element: dot,
+                x: x,
+                y: y,
+                vx: vx,
+                vy: vy,
+                size: size,
+                color: getDotColor(socialClass),
+                socialClass: socialClass,
+                gender: gender,
+                age: 0,
+                isPregnant: false,
+                pregnancyTicks: 0
+            });
+            
+            // 更新计数
+            if (socialClass === 'emperor') state.emperorCount++;
+            if (socialClass === 'noble') state.nobleCount++;
+            if (socialClass === 'commoner') state.commonerCount++;
+        }
+
+        // 确定社会阶级
+        function determineSocialClass() {
+            // 原始部落时代只有部落成员
+            if (state.era === "原始文明" || state.era === "部落文明") {
+                return 'middle';
+            }
+            
+            const developmentFactor = state.development / 100;
+            const rand = Math.random();
+            
+            // 皇帝
+            if (rand < 0.01 * developmentFactor && state.development >= config.emperorThreshold && state.emperorCount === 0) {
+                return 'emperor';
+            }
+            
+            // 贵族
+            if (rand < 0.1 * developmentFactor && state.development >= config.nobleThreshold) {
+                return 'noble';
+            }
+            
+            // 平民
+            if (rand < 0.6 * developmentFactor && state.development >= config.commonerThreshold) {
+                return 'commoner';
+            }
+            
+            // 中产阶级
+            return 'middle';
+        }
+
+        // 获取点的颜色
+        function getDotColor(socialClass) {
+            switch (socialClass) {
+                case 'emperor': return '#FFD700';
+                case 'noble': return '#1E90FF';
+                case 'middle': return '#FFFFFF';
+                case 'commoner': return '#A0AEC0';
+                default: return '#FFFFFF';
+            }
+        }
+
+        // 更新阶级计数
+        function updateClassCounts() {
+            emperorCountEl.textContent = state.emperorCount;
+            nobleCountEl.textContent = state.nobleCount;
+            commonerCountEl.textContent = state.commonerCount;
+        }
+
+        // 更新人类点
+        function updateDots() {
+            const rect = simulationArea.getBoundingClientRect();
+            const width = rect.width || simulationArea.clientWidth;
+            const height = rect.height || simulationArea.clientHeight;
+            
+            // 重置计数
+            state.emperorCount = 0;
+            state.nobleCount = 0;
+            state.commonerCount = 0;
+            
+            state.dots.forEach((dot, index) => {
+                // 移动点
+                dot.x += dot.vx;
+                dot.y += dot.vy;
+                
+                // 边界检测
+                if (dot.x < 0) {
+                    dot.x = 0;
+                    dot.vx = -dot.vx;
+                } else if (dot.x > width - dot.size) {
+                    dot.x = width - dot.size;
+                    dot.vx = -dot.vx;
+                }
+                
+                if (dot.y < 0) {
+                    dot.y = 0;
+                    dot.vy = -dot.vy;
+                } else if (dot.y > height - dot.size) {
+                    dot.y = height - dot.size;
+                    dot.vy = -dot.vy;
+                }
+                
+                // 更新位置
+                dot.element.style.left = `${dot.x}px`;
+                dot.element.style.top = `${dot.y}px`;
+                
+                // 更新年龄
+                dot.age++;
+                
+                // 检查是否达到最大寿命
+                if (dot.age >= config.maxLifeSpan) {
+                    state.dots.splice(index, 1);
+                    dot.element.remove();
+                    state.population--;
+                    return;
+                }
+                
+                // 更新阶级
+                const newClass = determineSocialClass();
+                if (newClass !== dot.socialClass) {
+                    if (dot.socialClass === 'emperor') state.emperorCount--;
+                    if (dot.socialClass === 'noble') state.nobleCount--;
+                    if (dot.socialClass === 'commoner') state.commonerCount--;
+                    
+                    dot.socialClass = newClass;
+                    dot.color = getDotColor(newClass);
+                    dot.element.style.backgroundColor = dot.color;
+                    dot.element.style.boxShadow = `0 0 3px ${dot.color}`;
+                    
+                    // 皇帝需要特殊处理
+                    if (newClass === 'emperor') {
+                        dot.element.style.width = `${dot.size * 1.5}px`;
+                        dot.element.style.height = `${dot.size * 1.5}px`;
+                        dot.element.style.zIndex = "10";
+                    } else if (dot.socialClass === 'emperor') {
+                        dot.element.style.width = `${dot.size}px`;
+                        dot.element.style.height = `${dot.size}px`;
+                        dot.element.style.zIndex = "1";
+                    }
+                    
+                    if (newClass === 'emperor') state.emperorCount++;
+                    if (newClass === 'noble') state.nobleCount++;
+                    if (newClass === 'commoner') state.commonerCount++;
+                    
+                    // 检查是否首次产生阶级
+                    if (newClass === 'emperor' && !state.hasEmperor) {
+                        state.hasEmperor = true;
+                        showEventPopup("新王朝的诞生", "一位领袖被推举为皇帝，建立了新的王朝");
+                    } else if (newClass === 'noble' && !state.hasNoble) {
+                        state.hasNoble = true;
+                        showEventPopup("贵族阶级的形成", "社会中出现了贵族阶级，权力开始分化");
+                    } else if (newClass === 'commoner' && !state.hasCommoner) {
+                        state.hasCommoner = true;
+                        showEventPopup("平民阶级的出现", "随着人口增长，平民阶级逐渐形成");
+                    }
+                }
+                
+                // 繁殖机制
+                if (dot.gender === 'female' && dot.age >= 15 && !dot.isPregnant) {
+                    const availableMales = state.dots.filter(d => d.gender === 'male' && d.age >= 15);
+                    if (availableMales.length > 0 && Math.random() < config.matingChance) {
+                        dot.isPregnant = true;
+                        dot.pregnancyTicks = 0;
+                        addHistoryEvent("一对夫妇开始孕育新生命");
+                    }
+                }
+                
+                if (dot.isPregnant) {
+                    dot.pregnancyTicks++;
+                    if (dot.pregnancyTicks >= config.pregnancyDuration) {
+                        dot.isPregnant = false;
+                        dot.pregnancyTicks = 0;
+                        createDot();
+                        state.population++;
+                        addHistoryEvent("一个新生儿诞生了");
+                    }
+                }
+                
+                // 更新计数
+                if (dot.socialClass === 'emperor') state.emperorCount++;
+                if (dot.socialClass === 'noble') state.nobleCount++;
+                if (dot.socialClass === 'commoner') state.commonerCount++;
+            });
+            
+            updateClassCounts();
+        }
+
+        // 更新状态显示
+        function updateDisplay() {
+            populationEl.textContent = Math.floor(state.population);
+            technologyEl.textContent = Math.floor(state.technology);
+            resourcesEl.textContent = Math.floor(state.resources);
+            developmentEl.textContent = Math.floor(state.development);
+            eraEl.textContent = state.era;
+            yearEl.textContent = state.year >= 0 ? `公元${state.year}年` : `公元前${-state.year}年`;
+            
+            // 更新时间轴
+            const currentEra = eras.find(e => state.year >= e.startYear && state.year < e.endYear);
+            if (currentEra) {
+                const eraProgress = (state.year - currentEra.startYear) / (currentEra.endYear - currentEra.startYear);
+                timelineEl.style.width = `${Math.min(100, Math.max(0, eraProgress * 100))}%`;
+                timelineEl.style.backgroundColor = currentEra.color;
+            }
+            
+            // 更新历史记录
+            historyEl.innerHTML = state.history.map(event => `
+                <li class="flex items-start">
+                    <i class="fa fa-circle text-xs mt-1.5 mr-2 text-gray-400"></i>
+                    <span>${event}</span>
+                </li>
+            `).join('');
+            historyEl.scrollTop = historyEl.scrollHeight;
+        }
+
+        // 显示事件提示
+        function showEventPopup(title, description) {
+            eventTitle.textContent = title;
+            eventDescription.textContent = description;
+            eventPopup.classList.remove('hidden');
+            
+            setTimeout(() => {
+                eventPopup.classList.add('hidden');
+            }, config.eventPopupDuration);
+        }
+
+        // 豆包AI思考
+        async function thinkWithDoubao() {
+            if (state.aiRequestPending) return;
+            
+            state.aiRequestPending = true;
+            aiDecisionIndicator.classList.remove('hidden');
+            
+            try {
+                // 准备数据
+                const gameStateForAI = {
+                    era: state.era,
+                    year: state.year,
+                    population: state.population,
+                    technology: state.technology,
+                    resources: state.resources,
+                    development: state.development,
+                    socialStructure: {
+                        emperorCount: state.emperorCount,
+                        nobleCount: state.nobleCount,
+                        commonerCount: state.commonerCount
+                    },
+                    recentEvents: state.history.slice(-5),
+                    config: {
+                        aiCreativity: config.aiCreativity,
+                        aiDecisionWeight: config.aiDecisionWeight
+                    }
+                };
+                
+                // 获取AI决策
+                const aiResponse = await simulateAIDecision(gameStateForAI);
+                
+                // 应用决策
+                applyAIDecision(aiResponse);
+                
+                state.lastAiThinkYear = state.year;
+            } catch (error) {
+                console.error('AI思考出错:', error);
+                addHistoryEvent("AI思考出错，继续使用默认策略");
+            } finally {
+                state.aiRequestPending = false;
+                aiDecisionIndicator.classList.add('hidden');
+            }
+        }
+
+        // 模拟AI决策
+        function simulateAIDecision(gameState) {
+            const decisions = {
+                policyChanges: [
+                    "实施鼓励生育政策",
+                    "增加科技投资",
+                    "推行资源保护措施",
+                    "实施财富再分配政策",
+                    "加强教育普及",
+                    "建立社会保障体系"
+                ],
+                scientificBreakthrough: [
+                    "发现了火的使用方法",
+                    "发明了工具",
+                    "发展了农业",
+                    "掌握了金属冶炼技术",
+                    "发明了文字",
+                    "发现了医药知识",
+                    "发明了机械装置",
+                    "发现了电力"
+                ],
+                socialChange: [
+                    "社会流动性增加",
+                    "阶级矛盾加剧",
+                    "中产阶级崛起",
+                    "女权运动兴起",
+                    "民主意识增强"
+                ],
+                resourceAllocation: [
+                    "优先发展农业",
+                    "加大工业投资",
+                    "发展基础设施",
+                    "开发新能源",
+                    "加强资源储备"
+                ]
+            };
+            
+            // 根据时代调整
+            let eraFactor = 1;
+            if (gameState.era === "原始文明") eraFactor = 0.3;
+            if (gameState.era === "部落文明") eraFactor = 0.5;
+            if (gameState.era === "古代文明") eraFactor = 0.7;
+            if (gameState.era === "未来文明") eraFactor = 1.2;
+            
+            const result = {};
+            
+            // 随机选择决策
+            if (Math.random() < 0.8 * eraFactor) {
+                result.policyChanges = decisions.policyChanges[Math.floor(Math.random() * decisions.policyChanges.length)];
+            }
+            
+            // 根据时代和科技水平限制可能的发明
+            const availableBreakthroughs = decisions.scientificBreakthrough.filter(breakthrough => {
+                if (gameState.era === "原始文明" && !state.hasFire) return breakthrough === "发现了火的使用方法";
+                if (gameState.era === "原始文明" && !state.hasTools) return breakthrough === "发明了工具";
+                if (gameState.era === "部落文明" && !state.hasAgriculture) return breakthrough === "发展了农业";
+                if (gameState.era === "古代文明" && !state.hasMetallurgy) return breakthrough === "掌握了金属冶炼技术";
+                if (gameState.era === "古代文明" && !state.hasWriting) return breakthrough === "发明了文字";
+                if (gameState.era === "中世纪文明" && !state.hasMedicine) return breakthrough === "发现了医药知识";
+                if (gameState.era === "工业文明" && !state.hasMechanics) return breakthrough === "发明了机械装置";
+                if (gameState.era === "现代文明" && !state.hasElectricity) return breakthrough === "发现了电力";
+                return false;
+            });
+            
+            if (availableBreakthroughs.length > 0 && Math.random() < 0.6 * eraFactor) {
+                result.scientificBreakthrough = availableBreakthroughs[0];
+            }
+            
+            if (Math.random() < 0.5 * eraFactor) {
+                result.socialChange = decisions.socialChange[Math.floor(Math.random() * decisions.socialChange.length)];
+            }
+            
+            return result;
+        }
+
+        // 应用AI决策
+        function applyAIDecision(decision) {
+            const aiInfluence = config.aiDecisionWeight / 100;
+            
+            if (decision.policyChanges) {
+                addHistoryEvent(`豆包AI建议: ${decision.policyChanges}`);
+                
+                if (decision.policyChanges.includes('鼓励生育')) {
+                    config.populationGrowthRate = 0.01 + 0.01 * aiInfluence;
+                    addHistoryEvent("人口增长率提高");
+                } else if (decision.policyChanges.includes('科技投资')) {
+                    config.techGrowthBase = 0.005 + 0.005 * aiInfluence;
+                    addHistoryEvent("科技研发加速");
+                }
+            }
+            
+            if (decision.scientificBreakthrough) {
+                addHistoryEvent(`豆包AI引导科技突破: ${decision.scientificBreakthrough}`);
+                
+                // 特殊处理重要发明
+                if (decision.scientificBreakthrough === "发现了火的使用方法" && !state.hasFire) {
+                    state.hasFire = true;
+                    state.technology += 5;
+                    config.techGrowthBase = 0.01;
+                    showEventPopup("火的发现", "人类掌握了火的使用，生活质量大幅提高");
+                } else if (decision.scientificBreakthrough === "发明了工具" && !state.hasTools) {
+                    state.hasTools = true;
+                    state.technology += 8;
+                    config.resourceConsumptionRate = 0.015;
+                    showEventPopup("工具的发明", "简单的工具提高了生产效率");
+                } else if (decision.scientificBreakthrough === "发展了农业" && !state.hasAgriculture) {
+                    state.hasAgriculture = true;
+                    state.technology += 15;
+                    config.populationGrowthRate = 0.02;
+                    config.resourceRegenerationRate = 0.05;
+                    showEventPopup("农业革命", "人类从狩猎采集转向农业生产，社会结构发生变化");
+                }
+            }
+        }
+
+        // 添加历史事件
+        function addHistoryEvent(event) {
+            state.history.push(event);
+        }
+
+        // 启动模拟
+        function startSimulation() {
+            state.isRunning = true;
+            startBtn.disabled = true;
+            resetBtn.disabled = false;
+
+            state.simulationInterval = setInterval(() => {
+                // 更新状态
+                state.tick++;
+                state.year++;
+
+                // 人口增长
+                state.population += state.population * config.populationGrowthRate;
+
+                // 科技发展
+                state.technology += state.technology * config.techGrowthBase;
+
+                // 资源消耗与再生
+                state.resources -= state.resources * config.resourceConsumptionRate;
+                state.resources += state.resources * config.resourceRegenerationRate;
+
+                // 社会发展
+                state.development = state.population * 0.2 + state.technology * 0.3 + state.resources * 0.5;
+
+                // 更新时代
+                const currentEra = eras.find(e => state.year >= e.startYear && state.year < e.endYear);
+                if (currentEra) {
+                    state.era = currentEra.name;
+                }
+
+                // AI思考
+                if (state.year - state.lastAiThinkYear >= config.aiThinkFrequency) {
+                    thinkWithDoubao();
+                }
+
+                // 更新点
+                updateDots();
+
+                // 更新显示
+                updateDisplay();
+            }, config.tickInterval);
+        }
+
+        // 重置模拟
+        function resetSimulation() {
+            clearInterval(state.simulationInterval);
+            state = {
+                isRunning: false,
+                tick: 0,
+                population: 10,
+                technology: 0,
+                resources: 50,
+                development: 0,
+                era: "原始文明",
+                year: -10000,
+                dots: [],
+                history: ["人类诞生"],
+                emperorCount: 0,
+                nobleCount: 0,
+                commonerCount: 0,
+                lastAiThinkYear: -Infinity,
+                aiRequestPending: false,
+                simulationInterval: null,
+                hasEmperor: false,
+                hasNoble: false,
+                hasCommoner: false,
+                hasMiddleClass: false,
+                hasFire: false,
+                hasTools: false,
+                hasAgriculture: false,
+                hasMetallurgy: false,
+                hasWriting: false,
+                hasMedicine: false,
+                hasMechanics: false,
+                hasElectricity: false
+            };
+
+            initSimulationArea();
+            updateDisplay();
+            startBtn.disabled = false;
+            resetBtn.disabled = true;
+        }
+
+        // 初始化
+        function init() {
+            createUniverse();
+            initSimulationArea();
+            updateDisplay();
+
+            startBtn.addEventListener('click', startSimulation);
+            resetBtn.addEventListener('click', resetSimulation);
+            
+            // 响应式调整
+            window.addEventListener('resize', () => {
+                if (state.isRunning) {
+                    // 暂停模拟
+                    clearInterval(state.simulationInterval);
+                    
+                    // 重新初始化模拟区域
+                    initSimulationArea();
+                    updateDisplay();
+                    
+                    // 恢复模拟
+                    state.simulationInterval = setInterval(() => {
+                        // 更新状态
+                        state.tick++;
+                        state.year++;
+
+                        // 人口增长
+                        state.population += state.population * config.populationGrowthRate;
+
+                        // 科技发展
+                        state.technology += state.technology * config.techGrowthBase;
+
+                        // 资源消耗与再生
+                        state.resources -= state.resources * config.resourceConsumptionRate;
+                        state.resources += state.resources * config.resourceRegenerationRate;
+
+                        // 社会发展
+                        state.development = state.population * 0.2 + state.technology * 0.3 + state.resources * 0.5;
+
+                        // 更新时代
+                        const currentEra = eras.find(e => state.year >= e.startYear && state.year < e.endYear);
+                        if (currentEra) {
+                            state.era = currentEra.name;
+                        }
+
+                        // AI思考
+                        if (state.year - state.lastAiThinkYear >= config.aiThinkFrequency) {
+                            thinkWithDoubao();
+                        }
+
+                        // 更新点
+                        updateDots();
+
+                        // 更新显示
+                        updateDisplay();
+                    }, config.tickInterval);
+                }
+            });
+        }
+
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>
+    
